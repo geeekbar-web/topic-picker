@@ -51,8 +51,8 @@ jobs:
             [ "$date" = "$TODAY" ] && continue
             python html_render.py "$md" "public/${date}.html"
           done
-          INDEX=$(python html_render.py --index public/)
-          echo "$INDEX"
+           python html_render.py --index public/
+
 
       - name: Commit & push
         run: |
