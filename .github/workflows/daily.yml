@@ -32,7 +32,15 @@ jobs:
 
       - name: Generate today's topic pack
         run: |
-          python main.py
+          python main.py 2>&1 | tee run.log
+          echo "--- exit code: ${PIPESTATUS[0]} ---"
+          if [ ! -s output/$(date -u +%Y-%m-%d).md ]; then
+            echo "!!! main.py produced no output file !!!"
+            echo "--- last 30 lines of run.log ---"
+            tail -30 run.log || true
+            exit 1
+          fi
+          echo "--- generated files ---"
           ls -la output/
 
       - name: Render to HTML
@@ -51,14 +59,14 @@ jobs:
             [ "$date" = "$TODAY" ] && continue
             python html_render.py "$md" "public/${date}.html"
           done
-           python html_render.py --index public/
-
+          python html_render.py --index public/
+          ls -la public/
 
       - name: Commit & push
         run: |
           git config user.name "topic-picker-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add public/ output/
+          git add public/ output/ run.log 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
