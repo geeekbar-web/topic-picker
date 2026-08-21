@@ -45,16 +45,17 @@ def _newsnow(sid: str) -> list[dict]:
             headers={"User-Agent": UA, "Accept": "application/json"},
             timeout=TIMEOUT,
         )
+        print(f"  [newsnow] {sid} HTTP {r.status_code} len={len(r.text)}", flush=True)
         if r.status_code != 200:
-            print(f"[{sid}] HTTP {r.status_code}")
             return []
         data = r.json()
     except Exception as e:
-        print(f"[{sid}] {type(e).__name__}: {e}")
+        print(f"  [newsnow] {sid} EXC: {type(e).__name__}: {e}", flush=True)
         return []
-
-    items: list[dict] = []
-    for i, it in enumerate(data.get("items") or []):
+    items = data.get("items") or []
+    print(f"  [newsnow] {sid} got {len(items)} items", flush=True)
+    result: list[dict] = []
+    for i, it in enumerate(items):
         title = (it.get("title") or "").strip()
         url = it.get("url") or it.get("mobileUrl") or ""
         if not title or not url:
@@ -68,7 +69,7 @@ def _newsnow(sid: str) -> list[dict]:
                 heat = float(m.group(1)) * 10000.0
         rank_heat = max(1.0, 100.0 - i * 3.0)
         heat = heat or rank_heat
-        items.append({
+        result.append({
             "title":   title,
             "url":     url,
             "source":  next((lbl for s, lbl, _ in NEWSNOW_SOURCES if s == sid), sid),
@@ -76,7 +77,8 @@ def _newsnow(sid: str) -> list[dict]:
             "time":    None,
             "summary": (extra.get("hover") or "").strip() if isinstance(extra, dict) else "",
         })
-    return items
+    return result
+
 
 
 def fetch_weibo()    -> list[dict]: return _newsnow("weibo")
