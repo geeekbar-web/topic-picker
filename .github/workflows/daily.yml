@@ -1,58 +1,23 @@
 name: Daily Topic Picker
-
-on:
-  schedule:
-    - cron: "0 0 * * *"
-  workflow_dispatch:
-  push:
-    branches: [main]
-
+on: [push, workflow_dispatch]
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
     steps:
-      - name: Checkout uses: actions/checkout@v4
-
-      - name: Set up Python
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Generate today's topic pack
-        run: |
-          python main.py
-          echo "=== EXIT CODE: $? ==="
-          echo "=== output dir contents ==="
-          ls -la output/ || true
-          #强制显示文件大小
-          wc -c output/*.md 2>/dev/null || echo "no .md files"
-
-      - name: Render to HTML
-        run: |
-          mkdir -p public
-          TODAY=$(date -u +%Y-%m-%d)
-          python html_render.py "output/${TODAY}.md" "public/${TODAY}.html" || echo "render failed for today"
-          python html_render.py --index public/
-          
-          ls -la public/
- 
-      - name: Commit & push
-        run: |
-          git config user.name "topic-picker-bot"
-          git config user.email "bot@users.noreply.github.com"
-          git add -A
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "🤖 Daily update: $(date -u +%Y-%m-%d)"
-            git push
-          fi
+      - name: install
+        run: pip install -r requirements.txt
+      - name: gen
+        run: python main.py
+ - name: render
+        run: bash -c "mkdir -p public && python html_render.py --index public/ && for md in output/*.md; do n=$(basename $md .md); python html_render.py $md public/$n.html; done"
+ - name: push
+        run: bash -c "git config user.name bot && git config user.email bot@users.noreply.github.com && git add -A && (git diff --staged --quiet && echo no-changes || (git commit -m daily && git push))"
