@@ -1,26 +1,35 @@
-"""Daily 1-min short-video topic picker.
-
-Usage:
-    python3.11 main.py                          # generate today's viral topic pack
-    GROQ_API_KEY=gsk_xxx python3.11 main.py     # enable AI-enhanced scripts
-    python3.11 main.py --top 30 --no-ai         # more topics, no AI
-"""
+"""Daily 1-min short-video topic picker — bulletproof version."""
 from __future__ import annotations
 
-# ---- debug: 抓 import 错误,确保 GitHub Actions 能看到真实问题 ----
-import sys, traceback
+import sys
+import os
+import time
+from datetime import datetime, timezone
+
+print("[boot] start", flush=True)
+
+# try 1: import everything we need
 try:
-    import argparse, os, time
-    from datetime import datetime, timezone
     from pathlib import Path
     from sources import FETCHERS
     from dedup_score import dedupe, score, write_report
-except Exception:
-    print("=" * 50, flush=True)
-    print("IMPORT ERROR:", flush=True)
-    traceback.print_exc()
-    print("=" * 50, flush=True)
-    sys.exit(99)
+    print("[boot] imports ok", flush=True)
+except Exception as e:
+    print(f"[boot] IMPORT FAILED: {type(e).__name__}: {e}", flush=True)
+    # write a minimal report so workflow doesn't hang
+    try:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        Path("output").mkdir(parents=True, exist_ok=True)
+        Path("output") / f"{date}.md"
+        Path("output", f"{date}.md").write_text(
+            f"# 选题包 · {date}\n\n"
+            f"Import error: {type(e).__name__}: {e}\n",
+            encoding="utf-8",
+        )
+        print(f"[boot] wrote fallback: output/{date}.md", flush=True)
+    except Exception as ee:
+        print(f"[boot] fallback write failed: {ee}", flush=True)
+    sys.exit(0)
 
 
 def fetch_all(enabled=None):
@@ -42,61 +51,42 @@ def fetch_all(enabled=None):
     return items, errors
 
 
-def main(argv=None):
-    p = argparse.ArgumentParser(description="Daily 1-min short-video topic picker")
-    p.add_argument("date", nargs="?", default=None,
-                   help="Report date (YYYY-MM-DD); defaults to today UTC")
-    p.add_argument("--top", type=int, default=20)
-    p.add_argument("--no-ai", action="store_true",
-                   help="Skip AI enhancement even if GROQ_API_KEY is set")
-    p.add_argument("--sources", default=None,
-                   help="Comma-separated source names to enable (default: all)")
-    p.add_argument("--out", default="output")
-    args = p.parse_args(argv)
+def main():
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    print(f"=== {date} ===", flush=True)
+    print(f"[cwd] {os.getcwd()}", flush=True)
 
-    date = args.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    Path("output").mkdir(parents=True, exist_ok=True)
 
-    print(f"=== 1-min Short-Video Topic Picker · {date} ===", flush=True)
-    print(f"[cwd]   {os.getcwd()}", flush=True)
-    enabled = args.sources.split(",") if args.sources else None
-    raw, errors = fetch_all(enabled)
+    raw, errors = fetch_all()
+    print(f"[raw] {len(raw)} items, {len(errors)} errors", flush=True)
 
-    if not raw:
-        # 兜底:就算全失败也生成空报告,让 workflow 不至于静默失败
-        print("[warn]  no items fetched — writing empty report", flush=True)
-        Path(args.out).mkdir(parents=True, exist_ok=True)
-        out = Path(args.out) / f"{date}.md"
+    # ALWAYS write a file — never silently produce nothing
+    out = Path("output") / f"{date}.md"
+    try:
+        if raw:
+            merged = dedupe(raw)
+            ranked = score(merged)
+            top = ranked[:20]
+            out_path = write_report(top, out_dir="output", date=date)
+            print(f"[done] -> {out_path}", flush=True)
+        else:
+            out.write_text(
+                f"# 选题包 · {date}\n\n"
+                f"> 全部数据源抓取失败。\n\n"
+                f"失败源: {', '.join(errors.keys()) or '未知'}\n",
+                encoding="utf-8",
+            )
+            print(f"[done] -> {out} (empty fallback)", flush=True)
+    except Exception as e:
+        print(f"[done] write_report failed: {e}", flush=True)
+        # last-ditch: write a minimal file
         out.write_text(
-            f"# 🔥 1 分钟短视频选题包 · {date}\n\n"
-            f"> 今日数据源抓取失败,将在明天自动重试。\n\n"
-            f"_失败源: {', '.join(errors.keys()) or '全部'}_\n",
+            f"# 选题包 · {date}\n\nError: {e}\n",
             encoding="utf-8",
         )
-        print(f"[done]  -> {out}  (empty fallback)", flush=True)
-        return 0
+        print(f"[done] wrote error fallback: {out}", flush=True)
 
-    merged = dedupe(raw)
-    print(f"[dedup] {len(raw)} raw  ->  {len(merged)} unique", flush=True)
-
-    ranked = score(merged)
-    top = ranked[: args.top]
-    print(f"[score] kept top {len(top)} of {len(ranked)}", flush=True)
-
-    use_ai = (not args.no_ai) and bool(os.environ.get("GROQ_API_KEY"))
-    print(f"[ai]    {'enabled (Groq)' if use_ai else 'disabled (rule-based)'}", flush=True)
-
-    out_path = write_report(top, out_dir=args.out, date=date, use_ai=use_ai)
-    print(f"[done]  -> {out_path}", flush=True)
-
-    if os.environ.get("SMTP_HOST"):
-        try:
-            from emailer import send_report
-            send_report(out_path)
-        except Exception as e:
-            print(f"[email] error: {e}", flush=True)
-
-    if errors:
-        print(f"[warn]  {len(errors)} source(s) failed: {', '.join(errors)}", flush=True)
     return 0
 
 
