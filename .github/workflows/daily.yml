@@ -16,52 +16,40 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
+          cache: pip - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Generate today's topic pack
         run: |
-          set -x
-          python -u main.py
-          echo "--- listing output ---"
-          ls -la output/ 2>&1 || echo "no output dir"
-
+          python main.py
+          echo "=== EXIT CODE: $? ==="
+          echo "=== output dir contents ==="
+          ls -la output/ || true
+          #强制显示文件大小
+          wc -c output/*.md 2>/dev/null || echo "no .md files"
 
       - name: Render to HTML
         run: |
           mkdir -p public
           TODAY=$(date -u +%Y-%m-%d)
-          if [ -f "output/${TODAY}.md" ]; then
-            python html_render.py "output/${TODAY}.md" "public/${TODAY}.html"
-          else
-            LATEST=$(ls -t output/*.md | head -1)
-            python html_render.py "$LATEST" "public/$(basename $LATEST .md).html"
-          fi
-          for md in output/*.md; do
-            [ -f "$md" ] || continue
-            date=$(basename "$md" .md)
-            [ "$date" = "$TODAY" ] && continue
-            python html_render.py "$md" "public/${date}.html"
-          done
+          python html_render.py "output/${TODAY}.md" "public/${TODAY}.html" || echo "render failed for today"
           python html_render.py --index public/
+          
           ls -la public/
-
+ 
       - name: Commit & push
         run: |
           git config user.name "topic-picker-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add public/ output/ run.log 2>/dev/null || true
+          git add -A
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
