@@ -1,0 +1,67 @@
+name: Daily Topic Picker
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate today's topic pack
+        run: |
+          python main.py
+          ls -la output/
+
+      - name: Render to HTML
+        run: |
+          mkdir -p public
+          TODAY=$(date -u +%Y-%m-%d)
+          if [ -f "output/${TODAY}.md" ]; then
+            python html_render.py "output/${TODAY}.md" "public/${TODAY}.html"
+          else
+            LATEST=$(ls -t output/*.md | head -1)
+            python html_render.py "$LATEST" "public/$(basename $LATEST .md).html"
+          fi
+          for md in output/*.md; do
+            [ -f "$md" ] || continue
+            date=$(basename "$md" .md)
+            [ "$date" = "$TODAY" ] && continue
+            python html_render.py "$md" "public/${date}.html"
+          done
+          INDEX=$(python html_render.py --index public/)
+          echo "$INDEX"
+
+      - name: Commit & push
+        run: |
+          git config user.name "topic-picker-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add public/ output/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🤖 Daily update: $(date -u +%Y-%m-%d)"
+            git push
+          fi
