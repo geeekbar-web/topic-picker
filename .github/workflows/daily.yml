@@ -31,17 +31,13 @@ jobs:
           pip install -r requirements.txt
 
       - name: Generate today's topic pack
+            - name: Generate today's topic pack
         run: |
-          python main.py 2>&1 | tee run.log
-          echo "--- exit code: ${PIPESTATUS[0]} ---"
-          if [ ! -s output/$(date -u +%Y-%m-%d).md ]; then
-            echo "!!! main.py produced no output file !!!"
-            echo "--- last 30 lines of run.log ---"
-            tail -30 run.log || true
-            exit 1
-          fi
-          echo "--- generated files ---"
-          ls -la output/
+          set -x
+          python -u main.py
+          echo "--- listing output ---"
+          ls -la output/ 2>&1 || echo "no output dir"
+
 
       - name: Render to HTML
         run: |
