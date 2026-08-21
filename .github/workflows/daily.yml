@@ -31,7 +31,6 @@ jobs:
           pip install -r requirements.txt
 
       - name: Generate today's topic pack
-            - name: Generate today's topic pack
         run: |
           set -x
           python -u main.py
