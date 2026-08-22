@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🔥 短视频选题 · 每日热点</title>
+<style>
+:root {
+  --bg: #0f0f14; --bg-card: #1a1a23; --bg-hover: #232331; --border: #2a2a3a;
+  --text: #e8e8f0; --text-dim: #9999aa;
+  --accent: #ff4757; --accent2: #ff6b81; --gold: #ffd700;
+  --green: #4ade80; --blue: #60a5fa; --purple: #c084fc;
+  --tag-bg: #2d2d40;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6;
+  padding: 16px; max-width: 920px; margin: 0 auto;
+}
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border); margin-bottom: 20px;
+}
+header h1 {
+  font-size: 22px;
+  background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.meta { color: var(--text-dim); font-size: 13px; }
+.meta b { color: var(--gold); }
+.btn {
+  background: var(--accent); color: #fff; border: none;
+  padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 600;
+}
+.btn:hover { background: var(--accent2); }
+.btn:disabled { background: var(--border); cursor: wait; }
+.tag-bar {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+}
+.tag-chip {
+  background: var(--tag-bg); color: var(--text); border: none;
+  padding: 6px 12px; border-radius: 14px; font-size: 12px;
+  cursor: pointer;
+}
+.tag-chip:hover { background: var(--bg-hover); }
+.tag-chip.active { background: var(--accent); color: #fff; }
+.tag-chip .c { opacity: 0.6; margin-left: 4px; font-size: 11px; }
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;
+}
+.card-top {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+}
+.rank {
+  background: var(--accent); color: #fff; width: 26px; height: 26px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.title { flex: 1; font-weight: 600; font-size: 15px; }
+.score {
+  background: var(--bg); color: var(--gold); padding: 3px 8px;
+  border-radius: 4px; font-size: 12px; font-weight: 700;
+}
+.meta-row {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+  font-size: 12px; color: var(--text-dim);
+}
+.tag {
+  background: var(--tag-bg); color: var(--purple);
+  padding: 2px 8px; border-radius: 4px; font-size: 11px;
+}
+.section { margin-bottom: 10px; padding: 8px 12px; background: var(--bg); border-radius: 6px; }
+.section .label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; font-weight: 600; }
+.section .body { font-size: 13px; color: var(--text); }
+.section.hook { border-left: 3px solid var(--accent); }
+.section.cta  { border-left: 3px solid var(--blue); }
+.section.visual { border-left: 3px solid var(--green); }
+.section ol { padding-left: 20px; }
+.section li { margin-bottom: 4px; }
+.card-link {
+  display: inline-block; margin-top: 6px; font-size: 12px;
+  color: var(--blue); text-decoration: none;
+}
+.card-link:hover { text-decoration: underline; }
+.empty, .loading {
+  text-align: center; padding: 60px 20px; color: var(--text-dim);
+}
+.empty .emoji, .loading .emoji {
+  font-size: 48px; display: block; margin-bottom: 12px;
+}
+footer {
+  margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--border);
+  text-align: center; font-size: 11px; color: var(--text-dim);
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🔥 短视频选题 · 每日热点</h1>
+    <div class="meta"><span id="update-time">加载中…</span> · 共 <b id="count">0</b> 条</div>
+  </div>
+  <button class="btn" id="refresh">刷一下看今天</button>
+</header>
+<div id="status" class="meta" style="margin-bottom:12px">正在初始化…</div>
+<div class="tag-bar" id="tag-bar"></div>
+<div id="main">
+  <div class="loading"><span class="emoji">⏳</span>正在抓取热点…</div>
+</div>
+<footer>基于 jina.ai reader 代理 · 数据源:微博/抖音/知乎/百度/贴吧/B站 + GitHub Trending</footer>
+<script>
+// 数据源(经 jina.ai 代理绕开 CORS)
+const SOURCES = [
+  { id: "weibo",    label: "微博热搜",   url: "https://newsnow.busiyi.world/api/s?id=weibo" },
+  { id: "douyin",   label: "抖音热点",   url: "https://newsnow.busiyi.world/api/s?id=douyin" },
+  { id: "zhihu",    label: "知乎热榜",   url: "https://newsnow.busiyi.world/api/s?id=zhihu" },
+  { id: "baidu",    label: "百度热搜",   url: "https://newsnow.busiyi.world/api/s?id=baidu" },
+  { id: "tieba",    label: "百度贴吧",   url: "https://newsnow.busiyi.world/api/s?id=tieba" },
+  { id: "bilibili", label: "B站热门",    url: "https://newsnow.busiyi.world/api/s?id=bilibili" },
+];
+
+const state = { items: [], tag: "全部", errors: [] };
+
+async function jinaFetch(url) {
+  const r = await fetch("https://r.jina.ai/" + url, {
+    headers: { "X-Return-Format": "json", "Accept": "application/json" },
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const text = await r.text();
+  let content = text;
+  try {
+    const j = JSON.parse(text);
+    if (j && j.data) {
+      if (typeof j.data === "string") content = j.data;
+      else if (j.data.content) content = j.data.content;
+      else if (j.data.markdown) content = j.data.markdown;
+    }
+  } catch (_) {}
+  return content;
+}
+
+async function fetchSource(src) {
+  try {
+    const body = await jinaFetch(src.url);
+    const data = JSON.parse(body);
+    return (data.items || []).slice(0, 20).map((it, i) => {
+      const title = (it.title || "").trim();
+      const url = it.url || it.mobileUrl || "";
+      if (!title || !url) return null;
+      const extra = it.extra || {};
+      let heat = 0;
+      if (extra.info) {
+        const m = String(extra.info).match(/([\d.]+)\s*万/);
+        if (m) heat = parseFloat(m[1]) * 10000;
+      }
+      if (!heat) heat = Math.max(1, 100 - i * 3);
+      return {
+        title, url, source: src.label, heat,
+        summary: (extra.hover || "").trim(), time: null,
+      };
+    }).filter(Boolean);
+  } catch (e) {
+    state.errors.push(src.label + ": " + e.message);
+    return [];
+  }
+}
+
+async function fetchGithubTrending() {
+  try {
+    const md = await jinaFetch("https://github.com/trending?since=daily");
+    const lines = md.split("\n");
+    const items = [];
+    let cur = null;
+    for (const line of lines) {
+      const m = line.match(/^#{2,4}\s*$$([^$$]+)\]$(https?:\/\/github\.com\/[^$]+)\)/);
+      if (m) {
+        if (cur) items.push(cur);
+        cur = { name: m[1].replace(/\s+/g, "").trim(), url: m[2].trim(), _d: "" };
+      } else if (cur && line.trim() && !line.startsWith("#")) {
+        cur._d = (cur._d + " " + line.trim()).trim();
+      }
+    }
+    if (cur) items.push(cur);
+    return items.slice(0, 10).map((it, i) => {
+      const desc = it._d.replace(/^by\s+@?[\w-]+.*$/i, "").trim().slice(0, 100);
+      return {
+        title: it.name + (desc ? " — " + desc : ""),
+        url: it.url, source: "GitHub",
+        heat: 30 + (10 - i) * 5, summary: desc, time: null,
+      };
+    });
+  } catch (e) {
+    state.errors.push("GitHub: " + e.message);
+    return [];
+  }
+}
+
+function normalizeTitle(t) {
+  return t.toLowerCase()
+    .replace(/[^\w\s一-鿿]+/g, " ").replace(/\s+/g, " ")
+    .trim().split(" ").filter(w => w.length >= 2).slice(0, 10).join(" ");
+}
+
+const SIGNAL_TAGS = {
+  controversy: ["起诉","驳回","违法","违规","禁止","封禁","下架","道歉","反驳","质疑","翻车","造假","骗局","被骂"],
+  money: ["1元","免费","白嫖","省钱","便宜","涨价","降价","月薪","补贴","赔偿","上市","融资","估值"],
+  lifestyle: ["午休","睡觉","美食","旅行","穿搭","化妆","瘦身","减肥","家装","收纳","养猫","遛娃"],
+  tech_quirk: ["AI","机器人","APP","小程序","代码","开源","工具","神器","黑科技","技巧"],
+  emotional: ["崩溃","哭了","泪目","心疼","暖心","治愈","扎心","破防","愤怒","离谱","炸了","笑死"],
+  social: ["女生","男生","00后","90后","打工人","职场","老板","同事","相亲","恋爱","分手","结婚","婆媳"],
+};
+
+function tagTopic(t) {
+  const tags = [];
+  for (const [cat, ws] of Object.entries(SIGNAL_TAGS)) {
+    if (ws.some(w => t.includes(w))) tags.push(cat);
+  }
+  return tags.length ? tags : ["general"];
+}
+
+const SOURCE_WEIGHT = {
+  "微博热搜": 1.0, "抖音热点": 1.0, "知乎热榜": 0.9,
+  "百度热搜": 0.8, "百度贴吧": 0.7, "B站热门": 0.7, "GitHub": 0.5,
+};
+
+function dedupeAndScore(items) {
+  const groups = {};
+  for (const it of items) {
+    const key = normalizeTitle(it.title);
+    if (!key) continue;
+    if (!groups[key]) {
+      groups[key] = { title: it.title, url: it.url, source: it.source,
+        sources: [it.source], heat: it.heat, summary: it.summary || "", time: it.time };
+    } else {
+      const g = groups[key];
+      g.sources.push(it.source);
+      g.heat = Math.max(g.heat, it.heat);
+      if (it.summary && it.summary.length > g.summary.length) g.summary = it.summary;
+    }
+  }
+  const list = Object.values(groups);
+  if (!list.length) return list;
+  const heats = list.map(g => g.heat);
+  const lo = Math.min(...heats), hi = Math.max(...heats);
+  for (const g of list) {
+    const h = (hi - lo) < 1 ? 0.5 : (g.heat - lo) / (hi - lo);
+    const cross = Math.min(1, Math.max(0, new Set(g.sources).size - 1) / 2);
+    const sw = Math.max(...g.sources.map(s => SOURCE_WEIGHT[s] ?? 0.7));
+    const tags = tagTopic(g.title);
+    let v = 0;
+    if (tags.includes("controversy") || tags.includes("emotional")) v += 0.15;
+    if (tags.includes("money")) v += 0.10;
+    if (tags.includes("lifestyle")) v += 0.08;
+    v += 0.10 * cross;
+    const raw = 0.55*h + 0.20*cross + 0.15*(sw - 0.7)/0.3 + 0.10 + v;
+    g.score = Math.round(Math.max(0, Math.min(1.2, raw)) * 100);
+    g.tags = tags;
+  }
+  list.sort((a, b) => b.score - a.score);
+  return list;
+}
+
+function buildPack(item) {
+  const t = item.title;
+  const tags = item.tags || ["general"];
+  const primary = tags[0];
+  const summary = item.summary || "这条话题正在 " + item.source + " 刷屏。";
+  let hook;
+  const hasNum = /\d/.test(t);
+  const isQ = /为什么|怎么|如何|什么|谁|哪/.test(t);
+  if (hasNum && !isQ) hook = "就因为这个数字,全网都炸了。";
+  else if (isQ) hook = "这个问题,90% 的人答错。";
+  else if (/禁止|驳回|起诉/.test(t)) hook = "这件事,大结局了。";
+  else if (/翻车|破防|哭了|崩溃/.test(t)) hook = "看到最后,我也没绷住。";
+  else if (/新|首发|上市|推出/.test(t)) hook = "刚出来,我就想第一时间告诉你。";
+  else hook = "今天这个瓜,有点大。";
+
+  const entity = (t.match(/[一-鿿]{2,8}/) || [""])[0];
+  const angles = [];
+  if (entity && entity !== t.slice(0, 2)) {
+    angles.push("先把「" + entity + "」这件事讲明白 — 所有人都在问。");
+  } else {
+    angles.push("先把最核心的事实摆出来,别让观众猜。");
+  }
+  if (primary === "money") angles.push("表面看是数字游戏,背后是一整条产业链。");
+  else if (primary === "controversy" || primary === "emotional") angles.push("为什么大家反应这么大?有 3 层原因。");
+  else if (primary === "lifestyle") angles.push("看似个人选择,其实是被设计好的。");
+  else if (primary === "tech_quirk") angles.push("它的爆火说明一个老问题没被解决。");
+  else if (primary === "social") angles.push("这届人的反应,和上一代完全不同。");
+  else angles.push("为什么突然火?3 个原因,排第一很多人没想到。");
+  if (/结婚|彩礼|离婚/.test(t)) angles.push("如果是你 / 你身边人,你会怎么处理?");
+  else if (/孩子|家长|学生/.test(t)) angles.push("代入家长 / 学生,看到这条更扎心。");
+  else if (/00后|打工人|职场|老板/.test(t)) angles.push("代入你自己 — 你会不会也这样做?");
+  else angles.push("你是支持 / 反对,还是觉得没那么简单?");
+
+  const visualMap = {
+    controversy: "红黄大字 + 慢速 zoom-in + 争议截图 + 弹幕式分屏",
+    money: "金额数字放大 + 价格对比 + 廉价 BGM 反转",
+    lifestyle: "生活画面 + 慢动作 + 暖色调 + 文字气泡",
+    tech_quirk: "录屏演示 + 步骤数字高亮 + 黑客帝国代码雨",
+    emotional: "慢镜头 + 钢琴 BGM + 黑屏白字金句",
+    social: "群体画像 + 街采片段 + 投票浮窗",
+    general: "新闻截图 + 红框标注 + 快切节奏",
+  };
+
+  let cta;
+  if (/结婚|彩礼|离婚/.test(t)) cta = "你们那边什么规矩?评论区聊聊。";
+  else if (/孩子|家长|学生/.test(t)) cta = "如果你是家长 / 孩子,看到会不会破防?";
+  else if (/00后|打工人|职场|老板/.test(t)) cta = "打工人集合,这事你经历过吗?评论区报到。";
+  else if (/免费|1元|羊毛|省钱/.test(t)) cta = "这种羊毛你薅过吗?评论区晒战绩。";
+  else if (/AI|机器人/.test(t)) cta = "AI 时代你怎么看?评论区和百万粉丝对个话。";
+  else cta = "你身边有这种人吗?评论区告诉我。";
+
+  return { hook, summary, angles, visual: visualMap[primary] || visualMap.general, cta };
+}
+
+function esc(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function renderCard(it, i) {
+  const p = buildPack(it);
+  const tagsHtml = (it.tags || []).map(x => '<span class="tag">#' + x + '</span>').join("");
+  const heat = it.heat >= 10000 ? (it.heat/10000).toFixed(0) + "万" : Math.round(it.heat);
+  return '<div class="card">' +
+    '<div class="card-top">' +
+      '<span class="rank">#' + i + '</span>' +
+      '<span class="title">' + esc(it.title) + '</span>' +
+      '<span class="score">⭐ ' + Math.round(it.score) + '</span>' +
+    '</div>' +
+    '<div class="meta-row">' +
+      '<span>🔥 ' + heat + '</span>' +
+      '<span>📡 ' + [...new Set(it.sources)].join(" · ") + '</span>' +
+      '<span>' + tagsHtml + '</span>' +
+    '</div>' +
+    '<div class="section hook"><div class="label">🎯 Hook</div><div class="body">' + esc(p.hook) + '</div></div>' +
+    '<div class="section"><div class="label">📖 背景</div><div class="body">' + esc(p.summary || "—") + '</div></div>' +
+    '<div class="section"><div class="label">💡 三个角度</div><div class="body"><ol>' +
+      p.angles.map(a => '<li>' + esc(a) + '</li>').join("") +
+    '</ol></div></div>' +
+    '<div class="section visual"><div class="label">🎥 视觉建议</div><div class="body">' + esc(p.visual) + '</div></div>' +
+    '<div class="section cta"><div class="label">💬 CTA</div><div class="body">' + esc(p.cta) + '</div></div>' +
+    '<a class="card-link" href="' + esc(it.url) + '" target="_blank" rel="noopener">🔗 原文</a>' +
+  '</div>';
+}
+
+function renderTagBar(items) {
+  const counts = {};
+  for (const it of items) for (const t of it.tags || []) counts[t] = (counts[t]||0)+1;
+  const bar = document.getElementById("tag-bar");
+  const tags = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  bar.innerHTML = '<button class="tag-chip ' + (state.tag==='全部'?'active':'') + '" data-tag="全部">全部</button>' +
+    tags.map(([k, v]) => '<button class="tag-chip ' + (state.tag===k?'active':'') + '" data-tag="' + k + '">' + k + '<span class="c">' + v + '</span></button>').join("");
+  bar.querySelectorAll(".tag-chip").forEach(b => {
+    b.onclick = () => { state.tag = b.dataset.tag; renderTagBar(state.items); renderMain(); };
+  });
+}
+
+function renderMain() {
+  const filtered = state.tag === "全部" ? state.items : state.items.filter(it => (it.tags||[]).includes(state.tag));
+  document.getElementById("count").textContent = filtered.length;
+  const main = document.getElementById("main");
+  if (!filtered.length) {
+    main.innerHTML = '<div class="empty"><span class="emoji">🔍</span>此标签下没有选题</div>';
+    return;
+  }
+  main.innerHTML = filtered.slice(0, 30).map((it, i) => renderCard(it, i+1)).join("");
+}
+
+function setStatus(msg) {
+  document.getElementById("status").textContent = msg;
+}
+
+async function refresh() {
+  const btn = document.getElementById("refresh");
+  btn.disabled = true;
+  state.errors = [];
+  document.getElementById("main").innerHTML = '<div class="loading"><span class="emoji">⏳</span>正在抓取 6 个数据源…</div>';
+  const t0 = Date.now();
+  try {
+    const results = await Promise.all([
+      ...SOURCES.map(fetchSource),
+      fetchGithubTrending(),
+    ]);
+    const raw = results.flat();
+    state.items = dedupeAndScore(raw);
+    state.items.forEach((it, i) => it.rank = i + 1);
+    renderTagBar(state.items);
+    renderMain();
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    const errMsg = state.errors.length ? " (失败:" + state.errors.join("; ") + ")" : "";
+    setStatus("✅ 抓取完成" + errMsg);
+    document.getElementById("update-time").textContent =
+      "更新于 " + new Date().toLocaleString("zh-CN") + " · " + secs + "s";
+  } catch (e) {
+    setStatus("❌ 抓取失败:" + e.message);
+    document.getElementById("main").innerHTML =
+      '<div class="empty"><span class="emoji">⚠️</span>抓取失败<br>' + esc(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("refresh").onclick = refresh;
+refresh();
+
+
